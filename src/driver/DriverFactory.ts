@@ -14,6 +14,7 @@ import {ExpoDriver} from "./expo/ExpoDriver";
 import {AuroraDataApiDriver} from "./aurora-data-api/AuroraDataApiDriver";
 import {Driver} from "./Driver";
 import {Connection} from "../connection/Connection";
+import {RethinkDBDriver} from './rethinkdb/RethinkDriver';
 
 /**
  * Helps to create drivers.
@@ -34,6 +35,8 @@ export class DriverFactory {
                 return new CockroachDriver(connection);
             case "mariadb":
                 return new MysqlDriver(connection);
+            case "rethinkdb":
+                return new RethinkDBDriver(connection);
             case "sqlite":
                 return new SqliteDriver(connection);
             case "cordova":

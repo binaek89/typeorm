@@ -14,5 +14,6 @@ export type DatabaseType =
     "oracle"|
     "mssql"|
     "mongodb"|
+    "rethinkdb"|
     "aurora-data-api"|
     "expo";
