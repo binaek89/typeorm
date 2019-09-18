@@ -125,7 +125,7 @@ export class RethinkDBDriver implements Driver {
         //         });
         // });
     }
- 
+
     afterConnect(): Promise<void> {
         return Promise.resolve();
     }
