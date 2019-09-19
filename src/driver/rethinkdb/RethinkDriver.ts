@@ -12,10 +12,14 @@ import { ColumnMetadata } from '../../metadata/ColumnMetadata';
 import { EntityMetadata } from '../../metadata/EntityMetadata';
 import { TableColumn } from '../../schema-builder/table/TableColumn';
 import { RethinkSchemaBuilder } from './RethinkSchemaBuilder';
+import { ApplyValueTransformers } from '../../util/ApplyValueTransformers';
+import { RethinkQueryRunner } from './RethinkQueryRunner';
+import { ObjectUtils } from '../../util/ObjectUtils';
 
 export class RethinkDBDriver implements Driver {
 
     rConnectionPool: MasterPool;
+    queryRunner: QueryRunner;
 
     // -------------------------------------------------------------------------
     // Public Implemented Properties
@@ -110,20 +114,11 @@ export class RethinkDBDriver implements Driver {
      */
     connect(): Promise<void> {
         return r.connectPool(this.options.rConnectionOptions)
-            .then((pool) => { this.rConnectionPool = pool; })
-
-        // return new Promise<void>((ok, fail) => {
-        //     this.mongodb.MongoClient.connect(
-        //         this.buildConnectionUrl(),
-        //         this.buildConnectionOptions(),
-        //         (err: any, client: any) => {
-        //             if (err) return fail(err);
-
-        //             this.queryRunner = new MongoQueryRunner(this.connection, client);
-        //             ObjectUtils.assign(this.queryRunner, { manager: this.connection.manager });
-        //             ok();
-        //         });
-        // });
+            .then((pool) => {
+                this.rConnectionPool = pool;
+                this.queryRunner = new RethinkQueryRunner(this.connection);
+                ObjectUtils.assign(this.queryRunner, { manager: this.connection.manager });
+            });
     }
 
     afterConnect(): Promise<void> {
@@ -144,8 +139,11 @@ export class RethinkDBDriver implements Driver {
         return new RethinkSchemaBuilder(this.connection);
     }
 
-    createQueryRunner(mode: "master" | "slave"): QueryRunner {
-        throw new Error("Method not implemented.");
+    /**
+     * Creates a query runner used to execute database queries.
+     */
+    createQueryRunner(mode: "master" | "slave" = "master") {
+        return this.queryRunner!;
     }
 
     /**
@@ -156,53 +154,126 @@ export class RethinkDBDriver implements Driver {
         throw new Error(`This operation is not supported by Rethinkdb driver.`);
     }
 
-    escape(name: string): string {
-        throw new Error("Method not implemented.");
+    /**
+     * Escapes a column name.
+     */
+    escape(columnName: string): string {
+        return columnName;
     }
-    buildTableName(tableName: string, schema?: string | undefined, database?: string | undefined): string {
-        throw new Error("Method not implemented.");
+
+
+    /**
+     * Build full table name with database name, schema name and table name.
+     * E.g. "myDB"."mySchema"."myTable"
+     */
+    buildTableName(tableName: string, schema?: string, database?: string): string {
+        return tableName;
     }
-    preparePersistentValue(value: any, column: ColumnMetadata) {
-        throw new Error("Method not implemented.");
+
+    /**
+     * Prepares given value to a value to be persisted, based on its column type and metadata.
+     */
+    preparePersistentValue(value: any, columnMetadata: ColumnMetadata): any {
+        if (columnMetadata.transformer)
+            value = ApplyValueTransformers.transformTo(columnMetadata.transformer, value);
+        return value;
     }
-    prepareHydratedValue(value: any, column: ColumnMetadata) {
-        throw new Error("Method not implemented.");
+
+    /**
+     * Prepares given value to a value to be persisted, based on its column type or metadata.
+     */
+    prepareHydratedValue(value: any, columnMetadata: ColumnMetadata): any {
+        if (columnMetadata.transformer)
+            value = ApplyValueTransformers.transformFrom(columnMetadata.transformer, value);
+        return value;
     }
-    normalizeType(column: { type?: string | BooleanConstructor | DateConstructor | NumberConstructor | StringConstructor | undefined; length?: string | number | undefined; precision?: number | null | undefined; scale?: number | undefined; isArray?: boolean | undefined; }): string {
-        throw new Error("Method not implemented.");
+
+    /**
+     * Creates a database type from a given column metadata.
+     */
+    normalizeType(column: { type?: ColumnType, length?: number | string, precision?: number | null, scale?: number }): string {
+        throw new Error(`MongoDB is schema-less, not supported by this driver.`);
     }
+
+    /**
+     * Normalizes "default" value of the column.
+     */
     normalizeDefault(columnMetadata: ColumnMetadata): string {
-        throw new Error("Method not implemented.");
+        throw new Error(`MongoDB is schema-less, not supported by this driver.`);
     }
+
+    /**
+     * Normalizes "isUnique" value of the column.
+     */
     normalizeIsUnique(column: ColumnMetadata): boolean {
-        throw new Error("Method not implemented.");
+        throw new Error(`MongoDB is schema-less, not supported by this driver.`);
     }
+
+    /**
+     * Calculates column length taking into account the default length values.
+     */
     getColumnLength(column: ColumnMetadata): string {
-        throw new Error("Method not implemented.");
+        throw new Error(`MongoDB is schema-less, not supported by this driver.`);
     }
-    createFullType(column: import("../..").TableColumn): string {
-        throw new Error("Method not implemented.");
+
+    /**
+     * Normalizes "default" value of the column.
+     */
+    createFullType(column: TableColumn): string {
+        throw new Error(`MongoDB is schema-less, not supported by this driver.`);
     }
+
+    /**
+     * Obtains a new database connection to a master server.
+     * Used for replication.
+     * If replication is not setup then returns default connection's database connection.
+     */
     obtainMasterConnection(): Promise<any> {
-        throw new Error("Method not implemented.");
+        return Promise.resolve();
     }
+
+    /**
+     * Obtains a new database connection to a slave server.
+     * Used for replication.
+     * If replication is not setup then returns master (default) connection's database connection.
+     */
     obtainSlaveConnection(): Promise<any> {
-        throw new Error("Method not implemented.");
+        return Promise.resolve();
     }
-    createGeneratedMap(metadata: EntityMetadata, insertResult: any): ObjectLiteral | undefined {
-        throw new Error("Method not implemented.");
+
+    /**
+     * Creates generated map of values generated or returned by database after INSERT query.
+     */
+    createGeneratedMap(metadata: EntityMetadata, insertedId: any) {
+        return metadata.objectIdColumn!.createValueMap(insertedId);
     }
+
+    /**
+     * Differentiate columns of this table and columns from the given column metadatas columns
+     * and returns only changed.
+     */
     findChangedColumns(tableColumns: TableColumn[], columnMetadatas: ColumnMetadata[]): ColumnMetadata[] {
-        throw new Error("Method not implemented.");
+        throw new Error(`MongoDB is schema-less, not supported by this driver.`);
     }
+
+    /**
+     * Returns true if driver supports RETURNING / OUTPUT statement.
+     */
     isReturningSqlSupported(): boolean {
-        throw new Error("Method not implemented.");
+        return false;
     }
+
+    /**
+     * Returns true if driver supports uuid values generation on its own.
+     */
     isUUIDGenerationSupported(): boolean {
-        throw new Error("Method not implemented.");
+        return true;
     }
+    /**
+     * Creates an escaped parameter.
+     */
     createParameter(parameterName: string, index: number): string {
-        throw new Error("Method not implemented.");
+        return "";
     }
     constructor(protected connection: Connection) { }
 }

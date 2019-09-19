@@ -1,13 +1,30 @@
 import { QueryRunner } from "../../query-runner/QueryRunner";
+import { Connection } from '../../connection/Connection';
+import { Broadcaster } from '../../subscriber/Broadcaster';
+import { EntityManager } from '../../entity-manager/EntityManager';
+import { ObjectLiteral } from '../../common/ObjectLiteral';
+import { Table } from '../../schema-builder/table/Table';
+import { View } from '../../schema-builder/view/View';
 
 export class RethinkQueryRunner implements QueryRunner {
-    connection: import("../..").Connection;    broadcaster: import("../../subscriber/Broadcaster").Broadcaster;
-    manager: import("../..").EntityManager;
+    connection: Connection;
+    broadcaster: Broadcaster;
+    manager: EntityManager;
     isReleased: boolean;
     isTransactionActive: boolean;
-    data: import("../..").ObjectLiteral;
-    loadedTables: import("../..").Table[];
-    loadedViews: import("../../schema-builder/view/View").View[];
+    data: ObjectLiteral;
+    loadedTables: Table[];
+    loadedViews: View[];
+
+    // -------------------------------------------------------------------------
+    // Constructor
+    // -------------------------------------------------------------------------
+
+    constructor(connection: Connection) {
+        this.connection = connection;
+        this.broadcaster = new Broadcaster(this);
+    }
+
     connect(): Promise<any> {
         throw new Error("Method not implemented.");
     }
