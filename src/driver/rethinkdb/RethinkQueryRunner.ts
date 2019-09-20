@@ -5,15 +5,64 @@ import { EntityManager } from '../../entity-manager/EntityManager';
 import { ObjectLiteral } from '../../common/ObjectLiteral';
 import { Table } from '../../schema-builder/table/Table';
 import { View } from '../../schema-builder/view/View';
+import { ReadStream } from 'fs';
+import { TableColumn } from '../../schema-builder/table/TableColumn';
+import { SqlInMemory } from '../SqlInMemory';
+import { TableIndex } from '../../schema-builder/table/TableIndex';
+import { TableForeignKey } from '../../schema-builder/table/TableForeignKey';
+import { TableExclusion } from '../../schema-builder/table/TableExclusion';
+import { TableUnique } from '../../schema-builder/table/TableUnique';
+import { TableCheck } from '../../schema-builder/table/TableCheck';
+import { r } from 'rethinkdb-ts';
 
 export class RethinkQueryRunner implements QueryRunner {
+
+    // -------------------------------------------------------------------------
+    // Public Implemented Properties
+    // -------------------------------------------------------------------------
+
+    /**
+     * Connection used by this query runner.
+     */
     connection: Connection;
+
+    /**
+     * Broadcaster used on this query runner to broadcast entity events.
+     */
     broadcaster: Broadcaster;
+
+    /**
+     * Entity manager working only with current query runner.
+     */
     manager: EntityManager;
-    isReleased: boolean;
-    isTransactionActive: boolean;
-    data: ObjectLiteral;
+
+    /**
+     * Indicates if connection for this query runner is released.
+     * Once its released, query runner cannot run queries anymore.
+     * Always false for mongodb since mongodb has a single query executor instance.
+     */
+    isReleased = false;
+
+    /**
+     * Indicates if transaction is active in this query executor.
+     * Always false for mongodb since mongodb does not support transactions.
+     */
+    isTransactionActive = false;
+
+    /**
+     * Stores temporarily user data.
+     * Useful for sharing data with subscribers.
+     */
+    data = {};
+
+    /**
+     * All synchronized tables in the database.
+     */
     loadedTables: Table[];
+
+    /**
+     * All synchronized views in the database.
+     */
     loadedViews: View[];
 
     // -------------------------------------------------------------------------
@@ -46,7 +95,7 @@ export class RethinkQueryRunner implements QueryRunner {
     query(query: string, parameters?: any[] | undefined): Promise<any> {
         throw new Error("Method not implemented.");
     }
-    stream(query: string, parameters?: any[] | undefined, onEnd?: Function | undefined, onError?: Function | undefined): Promise<import("fs").ReadStream> {
+    stream(query: string, parameters?: any[] | undefined, onEnd?: Function | undefined, onError?: Function | undefined): Promise<ReadStream> {
         throw new Error("Method not implemented.");
     }
     getDatabases(): Promise<string[]> {
@@ -55,16 +104,16 @@ export class RethinkQueryRunner implements QueryRunner {
     getSchemas(database?: string | undefined): Promise<string[]> {
         throw new Error("Method not implemented.");
     }
-    getTable(tablePath: string): Promise<import("../..").Table | undefined> {
+    getTable(tablePath: string): Promise<Table | undefined> {
         throw new Error("Method not implemented.");
     }
-    getTables(tablePaths: string[]): Promise<import("../..").Table[]> {
+    getTables(tablePaths: string[]): Promise<Table[]> {
         throw new Error("Method not implemented.");
     }
-    getView(viewPath: string): Promise<import("../../schema-builder/view/View").View | undefined> {
+    getView(viewPath: string): Promise<View | undefined> {
         throw new Error("Method not implemented.");
     }
-    getViews(viewPaths: string[]): Promise<import("../../schema-builder/view/View").View[]> {
+    getViews(viewPaths: string[]): Promise<View[]> {
         throw new Error("Method not implemented.");
     }
     hasDatabase(database: string): Promise<boolean> {
@@ -73,10 +122,10 @@ export class RethinkQueryRunner implements QueryRunner {
     hasSchema(schema: string): Promise<boolean> {
         throw new Error("Method not implemented.");
     }
-    hasTable(table: string | import("../..").Table): Promise<boolean> {
+    hasTable(table: string | Table): Promise<boolean> {
         throw new Error("Method not implemented.");
     }
-    hasColumn(table: string | import("../..").Table, columnName: string): Promise<boolean> {
+    hasColumn(table: string | Table, columnName: string): Promise<boolean> {
         throw new Error("Method not implemented.");
     }
     createDatabase(database: string, ifNotExist?: boolean | undefined): Promise<void> {
@@ -91,131 +140,164 @@ export class RethinkQueryRunner implements QueryRunner {
     dropSchema(schemaPath: string, ifExist?: boolean | undefined, isCascade?: boolean | undefined): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    createTable(table: import("../..").Table, ifNotExist?: boolean | undefined, createForeignKeys?: boolean | undefined, createIndices?: boolean | undefined): Promise<void> {
+    createTable(table: Table, ifNotExist?: boolean | undefined, createForeignKeys?: boolean | undefined, createIndices?: boolean | undefined): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropTable(table: string | import("../..").Table, ifExist?: boolean | undefined, dropForeignKeys?: boolean | undefined, dropIndices?: boolean | undefined): Promise<void> {
+    dropTable(table: string | Table, ifExist?: boolean | undefined, dropForeignKeys?: boolean | undefined, dropIndices?: boolean | undefined): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    createView(view: import("../../schema-builder/view/View").View, oldView?: import("../../schema-builder/view/View").View | undefined): Promise<void> {
+    createView(view: View, oldView?: View | undefined): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropView(view: string | import("../../schema-builder/view/View").View): Promise<void> {
+    dropView(view: string | View): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    renameTable(oldTableOrName: string | import("../..").Table, newTableName: string): Promise<void> {
+    renameTable(oldTableOrName: string | Table, newTableName: string): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    addColumn(table: string | import("../..").Table, column: import("../..").TableColumn): Promise<void> {
+    addColumn(table: string | Table, column: TableColumn): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    addColumns(table: string | import("../..").Table, columns: import("../..").TableColumn[]): Promise<void> {
+    addColumns(table: string | Table, columns: TableColumn[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    renameColumn(table: string | import("../..").Table, oldColumnOrName: string | import("../..").TableColumn, newColumnOrName: string | import("../..").TableColumn): Promise<void> {
+    renameColumn(table: string | Table, oldColumnOrName: string | TableColumn, newColumnOrName: string | TableColumn): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    changeColumn(table: string | import("../..").Table, oldColumn: string | import("../..").TableColumn, newColumn: import("../..").TableColumn): Promise<void> {
+    changeColumn(table: string | Table, oldColumn: string | TableColumn, newColumn: TableColumn): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    changeColumns(table: string | import("../..").Table, changedColumns: { oldColumn: import("../..").TableColumn; newColumn: import("../..").TableColumn; }[]): Promise<void> {
+    changeColumns(table: string | Table, changedColumns: { oldColumn: TableColumn; newColumn: TableColumn; }[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropColumn(table: string | import("../..").Table, column: string | import("../..").TableColumn): Promise<void> {
+    dropColumn(table: string | Table, column: string | TableColumn): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropColumns(table: string | import("../..").Table, columns: import("../..").TableColumn[]): Promise<void> {
+    dropColumns(table: string | Table, columns: TableColumn[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    createPrimaryKey(table: string | import("../..").Table, columnNames: string[]): Promise<void> {
+    createPrimaryKey(table: string | Table, columnNames: string[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    updatePrimaryKeys(table: string | import("../..").Table, columns: import("../..").TableColumn[]): Promise<void> {
+    updatePrimaryKeys(table: string | Table, columns: TableColumn[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropPrimaryKey(table: string | import("../..").Table): Promise<void> {
+    dropPrimaryKey(table: string | Table): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    createUniqueConstraint(table: string | import("../..").Table, uniqueConstraint: import("../..").TableUnique): Promise<void> {
+    createUniqueConstraint(table: string | Table, uniqueConstraint: TableUnique): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    createUniqueConstraints(table: string | import("../..").Table, uniqueConstraints: import("../..").TableUnique[]): Promise<void> {
+    createUniqueConstraints(table: string | Table, uniqueConstraints: TableUnique[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropUniqueConstraint(table: string | import("../..").Table, uniqueOrName: string | import("../..").TableUnique): Promise<void> {
+    dropUniqueConstraint(table: string | Table, uniqueOrName: string | TableUnique): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropUniqueConstraints(table: string | import("../..").Table, uniqueConstraints: import("../..").TableUnique[]): Promise<void> {
+    dropUniqueConstraints(table: string | Table, uniqueConstraints: TableUnique[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    createCheckConstraint(table: string | import("../..").Table, checkConstraint: import("../..").TableCheck): Promise<void> {
+    createCheckConstraint(table: string | Table, checkConstraint: TableCheck): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    createCheckConstraints(table: string | import("../..").Table, checkConstraints: import("../..").TableCheck[]): Promise<void> {
+    createCheckConstraints(table: string | Table, checkConstraints: TableCheck[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropCheckConstraint(table: string | import("../..").Table, checkOrName: string | import("../..").TableCheck): Promise<void> {
+    dropCheckConstraint(table: string | Table, checkOrName: string | TableCheck): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropCheckConstraints(table: string | import("../..").Table, checkConstraints: import("../..").TableCheck[]): Promise<void> {
+    dropCheckConstraints(table: string | Table, checkConstraints: TableCheck[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    createExclusionConstraint(table: string | import("../..").Table, exclusionConstraint: import("../..").TableExclusion): Promise<void> {
+    createExclusionConstraint(table: string | Table, exclusionConstraint: TableExclusion): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    createExclusionConstraints(table: string | import("../..").Table, exclusionConstraints: import("../..").TableExclusion[]): Promise<void> {
+    createExclusionConstraints(table: string | Table, exclusionConstraints: TableExclusion[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropExclusionConstraint(table: string | import("../..").Table, exclusionOrName: string | import("../..").TableExclusion): Promise<void> {
+    dropExclusionConstraint(table: string | Table, exclusionOrName: string | TableExclusion): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropExclusionConstraints(table: string | import("../..").Table, exclusionConstraints: import("../..").TableExclusion[]): Promise<void> {
+    dropExclusionConstraints(table: string | Table, exclusionConstraints: TableExclusion[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    createForeignKey(table: string | import("../..").Table, foreignKey: import("../..").TableForeignKey): Promise<void> {
+    createForeignKey(table: string | Table, foreignKey: TableForeignKey): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    createForeignKeys(table: string | import("../..").Table, foreignKeys: import("../..").TableForeignKey[]): Promise<void> {
+    createForeignKeys(table: string | Table, foreignKeys: TableForeignKey[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropForeignKey(table: string | import("../..").Table, foreignKeyOrName: string | import("../..").TableForeignKey): Promise<void> {
+    dropForeignKey(table: string | Table, foreignKeyOrName: string | TableForeignKey): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropForeignKeys(table: string | import("../..").Table, foreignKeys: import("../..").TableForeignKey[]): Promise<void> {
+    dropForeignKeys(table: string | Table, foreignKeys: TableForeignKey[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    createIndex(table: string | import("../..").Table, index: import("../..").TableIndex): Promise<void> {
+    createIndex(table: string | Table, index: TableIndex): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    createIndices(table: string | import("../..").Table, indices: import("../..").TableIndex[]): Promise<void> {
+    createIndices(table: string | Table, indices: TableIndex[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropIndex(table: string | import("../..").Table, index: string | import("../..").TableIndex): Promise<void> {
+    dropIndex(table: string | Table, index: string | TableIndex): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    dropIndices(table: string | import("../..").Table, indices: import("../..").TableIndex[]): Promise<void> {
+    dropIndices(table: string | Table, indices: TableIndex[]): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    clearTable(tableName: string): Promise<void> {
-        throw new Error("Method not implemented.");
+
+    /**
+     * Drops collection.
+     */
+    async clearTable(tableName: string): Promise<void> {
+        return r.db(this.connection.driver.database + "").table(tableName).delete().run().then(() => { });
     }
+
+    /**
+     * Enables special query runner mode in which sql queries won't be executed,
+     * instead they will be memorized into a special variable inside query runner.
+     * You can get memorized sql using getMemorySql() method.
+     */
     enableSqlMemory(): void {
-        throw new Error("Method not implemented.");
+        throw new Error(`This operation is not supported by MongoDB driver.`);
     }
+
+    /**
+     * Disables special query runner mode in which sql queries won't be executed
+     * started by calling enableSqlMemory() method.
+     *
+     * Previously memorized sql will be flushed.
+     */
     disableSqlMemory(): void {
-        throw new Error("Method not implemented.");
+        throw new Error(`This operation is not supported by MongoDB driver.`);
     }
+
+    /**
+     * Flushes all memorized sqls.
+     */
     clearSqlMemory(): void {
-        throw new Error("Method not implemented.");
+        throw new Error(`This operation is not supported by MongoDB driver.`);
     }
-    getMemorySql(): import("../SqlInMemory").SqlInMemory {
-        throw new Error("Method not implemented.");
+
+    /**
+     * Gets sql stored in the memory. Parameters in the sql are already replaced.
+     */
+    getMemorySql(): SqlInMemory {
+        throw new Error(`This operation is not supported by MongoDB driver.`);
     }
-    executeMemoryUpSql(): Promise<void> {
-        throw new Error("Method not implemented.");
+
+    /**
+     * Executes up sql queries.
+     */
+    async executeMemoryUpSql(): Promise<void> {
+        throw new Error(`This operation is not supported by MongoDB driver.`);
     }
-    executeMemoryDownSql(): Promise<void> {
-        throw new Error("Method not implemented.");
+
+    /**
+     * Executes down sql queries.
+     */
+    async executeMemoryDownSql(): Promise<void> {
+        throw new Error(`This operation is not supported by MongoDB driver.`);
     }
 
 
